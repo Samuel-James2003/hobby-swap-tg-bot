@@ -1,3 +1,4 @@
+from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext
 import os
@@ -21,6 +22,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # When speaking directly to the bot saying /help
     return
+
+
+def convert_html_list_to_text(html):
+    soup = BeautifulSoup(html, "html.parser")
+    # Check if the text contains lists
+    has_lists = bool(soup.find("ol") or soup.find("ul"))
+
+    message = ""
+
+    # Process ordered lists (<ol>)
+    for ol in soup.find_all("ol"):
+        items = [f"{i+1}. {li.get_text(strip=True)}" for i, li in enumerate(ol.find_all("li"))]
+        message += "\n".join(items) + "\n"
+
+    # Process unordered lists (<ul>)
+    for ul in soup.find_all("ul"):
+        items = [f"- {li.get_text(strip=True)}" for li in ul.find_all("li")]
+        message += "\n".join(items) + "\n"
+        
+    # If no lists were found, return the original text
+    return message.strip() if has_lists else html.strip()
+
 async def recipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # When a message is received directly
     response = get_random_recipes(SPOON_TOKEN, number=1)
@@ -45,7 +68,7 @@ async def recipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Ingredients:")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=ingredients_response)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Instructions:")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=instructions, parse_mode="HTML")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=convert_html_list_to_text(instructions))
     await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Enjoy your meal!")
 

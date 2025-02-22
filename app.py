@@ -21,6 +21,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # When speaking directly to the bot saying /help
+    help_text = (
+        "🍽 *Curly's Cuisine Help Menu* 🍽\n\n"
+        "Feeling hungry? Let me help you cook up something delicious\! Here’s how you can use me:\n\n"
+        "🔹 */recipe* \- Get a random recipe with ingredients and instructions\.\n"
+        "🔹 *Send a message* \- If it’s not a command, I’ll kindly remind you to use /recipe 😆\n\n"
+        "That’s it\! Simple, right\? Now go forth and unleash your inner chef\! 👨‍🍳🔥"
+    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text, parse_mode="MarkdownV2")
     return
 
 
@@ -242,6 +250,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     # Add a CommandHandler for the /recipe command
     app.add_handler(CommandHandler("recipe", recipe))
+    # Add a CommandHandler for the /help command
+    app.add_handler(CommandHandler("help", help))
         
     app.add_error_handler(error_handler)
         

@@ -46,29 +46,13 @@ def convert_html_list_to_text(html):
 
 async def recipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # When a message is received directly
-    response = get_random_recipes(SPOON_TOKEN, number=1)
-    recipe = response[0] 
+    text_response, ingredients_response, instruction_response, image_url = get_random_recipes(SPOON_TOKEN, number=1)
     
-    recipe_title = recipe['title']
-    cooking_time = recipe['readyInMinutes']
-    servings = recipe['servings']
-    recipe_url = recipe['sourceUrl']
-    image_url = recipe['image']
-    instructions = recipe['instructions']
-    ingredients = recipe['extendedIngredients']
-    ingredients_response = ""
-    for ingredient in ingredients:
-        amount = ingredient['amount']
-        unit = ingredient['unit']
-        name = ingredient['name']
-        ingredients_response += f"{amount} {unit} {name}\n"
-    
-    text_response = f"Title: {recipe_title}\nCooking Time: {cooking_time} minutes\nServings: {servings}\nRecipe URL: {recipe_url}"
     await context.bot.send_message(chat_id=update.effective_chat.id, text=text_response)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Ingredients:")
     await context.bot.send_message(chat_id=update.effective_chat.id, text=ingredients_response)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Instructions:")
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=convert_html_list_to_text(instructions))
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=instruction_response)
     await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Enjoy your meal!")
 
@@ -79,29 +63,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             #the user is not the sender
             if verify_permissions(update.business_message.chat_id):
                 #the user has not used the bot yet
-                response = get_random_recipes(SPOON_TOKEN, number=1)
-                recipe = response[0] 
-                
-                recipe_title = recipe['title']
-                cooking_time = recipe['readyInMinutes']
-                servings = recipe['servings']
-                recipe_url = recipe['sourceUrl']
-                image_url = recipe['image']
-                instructions = recipe['instructions']
-                ingredients = recipe['extendedIngredients']
-                ingredients_response = ""
-                for ingredient in ingredients:
-                    amount = ingredient['amount']
-                    unit = ingredient['unit']
-                    name = ingredient['name']
-                    ingredients_response += f"{amount} {unit} {name}\n"
-                
-                text_response = f"Title: {recipe_title}\nCooking Time: {cooking_time} minutes\nServings: {servings}\nRecipe URL: {recipe_url}"
-                await context.bot.send_message(chat_id=update.effective_chat.id,text=text_response, business_connection_id=update.business_message.business_connection_id)
+                text_response, ingredients_response, instruction_response, image_url = get_random_recipes(SPOON_TOKEN, number=1)
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=text_response, business_connection_id=update.business_message.business_connection_id)
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="Ingredients:", business_connection_id=update.business_message.business_connection_id)
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=ingredients_response, business_connection_id=update.business_message.business_connection_id)
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="Instructions:", business_connection_id=update.business_message.business_connection_id)
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=instructions, parse_mode="HTML", business_connection_id=update.business_message.business_connection_id)
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=instruction_response, business_connection_id=update.business_message.business_connection_id)
                 await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url, business_connection_id=update.business_message.business_connection_id)
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="Enjoy your meal!", business_connection_id=update.business_message.business_connection_id)
                 AddExhastedUser(update.business_message.chat_id)
@@ -127,17 +94,14 @@ async def error_handler(update: Update, context: CallbackContext) -> None:
     # Optionally, log the error for debugging purposes
     print(f"Error occurred: {error_message}")
 
-def get_random_recipes(api_key, number=5, include_tags=""):
+def get_random_recipes(api_key: str, number: int = 5, include_tags: str = "") -> tuple:
     """
-    Fetches random recipes from Spoonacular API.
-    
-    Parameters:
-        api_key (str): Your Spoonacular API key.
-        number (int): Number of random recipes to fetch (default is 5).
-        tags (str): Comma-separated tags to filter recipes (e.g., "vegetarian,dessert").
-    
-    Returns:
-        dict: JSON response containing the random recipes.
+    Fetches random recipes from the Spoonacular API.
+
+    :param api_key: API key for authenticating with the Spoonacular API.
+    :param number: Number of random recipes to fetch.
+    :param include_tags: Tags to include in the recipe search.
+    :return: A tuple containing the text response, ingredients response, instruction response, and image URL.
     """
     endpoint = "https://api.spoonacular.com/recipes/random"
     params = {
@@ -150,7 +114,25 @@ def get_random_recipes(api_key, number=5, include_tags=""):
 
     if response.status_code == 200:
         data = response.json()  # Extract JSON response
-        return data.get("recipes", [])  # Extract recipes list
+        recipe = data.get("recipes", [])[0] 
+        
+        recipe_title = recipe['title']
+        cooking_time = recipe['readyInMinutes']
+        servings = recipe['servings']
+        recipe_url = recipe['sourceUrl']
+        image_url = recipe['image']
+        instructions = recipe['instructions']
+        ingredients = recipe['extendedIngredients']
+        ingredients_response = ""
+        for ingredient in ingredients:
+            amount = ingredient['amount']
+            unit = ingredient['unit']
+            name = ingredient['name']
+            ingredients_response += f"{amount} {unit} {name}\n"
+        
+        text_response = f"Title: {recipe_title}\nCooking Time: {cooking_time} minutes\nServings: {servings}\nRecipe URL: {recipe_url}"
+        instruction_response = convert_html_list_to_text(instructions)
+        return text_response, ingredients_response, instruction_response, image_url
     else:
         return {"error": f"Request failed with status {response.status_code}", "message": response.text}
 

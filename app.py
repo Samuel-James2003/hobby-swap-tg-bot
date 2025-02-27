@@ -3,9 +3,14 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext
 import os
 import requests
+from debug import log_event
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 SPOON_TOKEN = os.getenv('SPOON_TOKEN')
+ADMINSFILE = os.path.curdir + "/files/admins.txt"
+EXHAUSTED_USERSFILE = os.path.curdir + "/files/exhasteduser.txt"
+DEBUGFILE = os.path.curdir + "/files/debug.txt"
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # When speaking directly to the bot saying /start
@@ -87,6 +92,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message is not None and update.message.text is not None:
         # A direct message to the bot 
         response = "Ah, a wild chef appears! 🧑‍🍳 But wait… you're missing the secret ingredient—the right command! Try typing /recipe, and I’ll whip up something delicious (or at least edible) for you! 🍕🔥"
+        response += f"\nOh by the way, here's a little trivia \n{get_food_trivia(SPOON_TOKEN)}"
         await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
         return
     return
@@ -94,13 +100,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: CallbackContext) -> None:
     # Get the error message
     error_message = str(context.error)
-
+    
     # Inform the user
     if update and update.effective_message:
         await update.effective_message.reply_text(f"Oops! Something went wrong:\n\n{error_message}")
 
     # Optionally, log the error for debugging purposes
-    print(f"Error occurred: {error_message}")
+    log_event(f"Error occurred: {error_message}", level="CRITICAL", exc_info=True)
+
+async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.effective_message.from_user.id) in GetAdmins():
+        text = read_text_from_file(DEBUGFILE)
+        if text == '':
+            text = "No messages in debug file"
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+        raise("Fuck")
+        return
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry can't help you with that.")
+    return 
 
 def get_random_recipes(api_key: str, number: int = 5, include_tags: str = "") -> tuple:
     """
@@ -117,57 +134,61 @@ def get_random_recipes(api_key: str, number: int = 5, include_tags: str = "") ->
         "number": number,
         "include-tags": include_tags
     }
+    try: 
+        response = requests.get(endpoint, params=params)
 
-    response = requests.get(endpoint, params=params)
+        if response.status_code == 200:
+            data = response.json()  # Extract JSON response
+            recipe = data.get("recipes", [])[0] 
+            
+            recipe_title = recipe['title']
+            cooking_time = recipe['readyInMinutes']
+            servings = recipe['servings']
+            recipe_url = recipe['sourceUrl']
+            image_url = recipe['image']
+            instructions = recipe['instructions']
+            ingredients = recipe['extendedIngredients']
+            ingredients_response = ""
+            for ingredient in ingredients:
+                amount = ingredient['amount']
+                unit = ingredient['unit']
+                name = ingredient['name']
+                ingredients_response += f"{amount} {unit} {name}\n"
+            
+            text_response = f"Title: {recipe_title}\nCooking Time: {cooking_time} minutes\nServings: {servings}\nRecipe URL: {recipe_url}"
+            instruction_response = convert_html_list_to_text(instructions)
+            return text_response, ingredients_response, instruction_response, image_url
+        else:
+            log_event(f"Request failed with status {response.status_code} with message {response.text}", level="ERROR", exc_info=True)
+            return "Oops something went wrong! Please try again later."
+    except Exception as e:
+        log_event(f"An error occurred: {e}", level="ERROR",exc_info=True)
+        return "An error occurred while fetching recipes. Please try again later."
 
-    if response.status_code == 200:
-        data = response.json()  # Extract JSON response
-        recipe = data.get("recipes", [])[0] 
-        
-        recipe_title = recipe['title']
-        cooking_time = recipe['readyInMinutes']
-        servings = recipe['servings']
-        recipe_url = recipe['sourceUrl']
-        image_url = recipe['image']
-        instructions = recipe['instructions']
-        ingredients = recipe['extendedIngredients']
-        ingredients_response = ""
-        for ingredient in ingredients:
-            amount = ingredient['amount']
-            unit = ingredient['unit']
-            name = ingredient['name']
-            ingredients_response += f"{amount} {unit} {name}\n"
-        
-        text_response = f"Title: {recipe_title}\nCooking Time: {cooking_time} minutes\nServings: {servings}\nRecipe URL: {recipe_url}"
-        instruction_response = convert_html_list_to_text(instructions)
-        return text_response, ingredients_response, instruction_response, image_url
-    else:
-        return {"error": f"Request failed with status {response.status_code}", "message": response.text}
+def get_food_trivia(api_key: str):
+    """
+    Fetches random food trivia from the Spoonacular API.
+    
+    :param api_key: API key for authenticating with the Spoonacular API.
+    :param number: Number of random food trivia to fetch.
+    :param include_tags: Tags to include in the trivia search.
+    :return: Food trivia.
+    """
+    
+    endpoint = "https://api.spoonacular.com/food/trivia/random"
+    params = {
+        "apiKey": api_key
+    }
+    try: 
+        response = requests.get(endpoint, params=params)
 
-
-# def get_food_trivia(configuration):
-#     with spoonacular.ApiClient(configuration) as api_client:
-#     # Create an instance of the API class
-#         api_instance = spoonacular.MiscApi(api_client)
-
-#         try:
-#             # Random Food Trivia
-#             api_response = api_instance.get_random_food_trivia()
-#             return api_response
-#         except Exception as e:
-#             return "Exception when calling MiscApi->get_random_food_trivia: %s\n" % e
-
-# def get_food_jokes(configuration):
-#     with spoonacular.ApiClient(configuration) as api_client:
-#         # Create an instance of the API class
-#         api_instance = spoonacular.MiscApi(api_client)
-
-#         try:
-#             # Random Food Joke
-#             api_response = api_instance.get_a_random_food_joke()
-#             return api_response
-#         except Exception as e:
-#             return "Exception when calling MiscApi->get_a_random_food_joke: %s\n" % e
+        if response.status_code == 200:
+            data = response.json()
+            trivia = data.get("text", "No trivia found.")
+            return trivia
+    except Exception as e:
+        log_event(f"An error occurred: {e}", level="ERROR",exc_info=True)
+        return "An error occurred while fetching food trivia. Please try again later."
 
 
 def isAnInt(value):
@@ -176,6 +197,28 @@ def isAnInt(value):
         return True
     except ValueError:
         return False
+
+def read_text_from_file(file_path:str):
+    """
+    Reads text from a file.
+    
+    :param file_path: Path to the file to read.
+    :return: The text read from the file.
+    """
+    try:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except FileNotFoundError:
+
+        with open(file_path, 'w', encoding='utf-8') as file:
+            pass
+        return ""
+    except Exception as e:
+        log_event(f"An error occurred: {e}")
+        return ""
 
 def read_list_from_file(file_path: str):
     """
@@ -197,7 +240,7 @@ def read_list_from_file(file_path: str):
             pass
         return []
     except Exception as e:
-        print(f"An error occurred: {e}")
+        log_event(f"An error occurred: {e}")
         return []
 
 def write_list_to_file(file_path:str, items:list):
@@ -220,7 +263,7 @@ def write_list_to_file(file_path:str, items:list):
         file.close()
         return True
     except Exception as e:
-        print(f"An error occurred: {e}")
+        log_event(f"An error occurred: {e}", level="ERROR", exc_info=True)
         return False
 
 def verify_permissions(ID:str):
@@ -232,6 +275,8 @@ def verify_permissions(ID:str):
 
 def GetExhastedUser():
     return read_list_from_file(os.path.curdir + "/files/exhasteduser.txt")
+def GetAdmins():
+    return read_list_from_file(ADMINSFILE)
 
 def AddExhastedUser(ID:str):
     """
@@ -252,6 +297,8 @@ def main():
     app.add_handler(CommandHandler("recipe", recipe))
     # Add a CommandHandler for the /help command
     app.add_handler(CommandHandler("help", help))
+    # Add a CommandHandler for the /debug command
+    app.add_handler(CommandHandler("debug", debug))
         
     app.add_error_handler(error_handler)
         

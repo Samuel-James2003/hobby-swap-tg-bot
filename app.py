@@ -103,7 +103,7 @@ async def error_handler(update: Update, context: CallbackContext) -> None:
     
     # Inform the user
     if update and update.effective_message:
-        await update.effective_message.reply_text(f"Oops! Something went wrong:\n\n{error_message}")
+        await update.effective_message.reply_text(f"Oops! Something went wrong. Please try again later.")
 
     # Optionally, log the error for debugging purposes
     log_event(f"Error occurred: {error_message}", level="CRITICAL", exc_info=True)
@@ -114,7 +114,6 @@ async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == '':
             text = "No messages in debug file"
         await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
-        raise("Fuck")
         return
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry can't help you with that.")
     return 

@@ -9,7 +9,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 SPOON_TOKEN = os.getenv('SPOON_TOKEN')
 ADMINSFILE = os.path.curdir + "/files/admins.txt"
 EXHAUSTED_USERSFILE = os.path.curdir + "/files/exhasteduser.txt"
-DEBUGFILE = os.path.curdir + "/files/debug.txt"
+DEBUGFILE = os.path.curdir + "/files/debug.log"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):

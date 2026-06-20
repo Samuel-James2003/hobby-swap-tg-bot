@@ -3,6 +3,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext
 import os
 import requests
+import time
+import httpx
 from debug import log_event
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -100,7 +102,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: CallbackContext) -> None:
     # Get the error message
     error_message = str(context.error)
-    
+    if isinstance(context.error, httpx.ConnectError):
+        log_event(f"Network unavailable: {error_message}", level="WARNING")
+        return
     # Inform the user
     if update and update.effective_message:
         await update.effective_message.reply_text(f"Oops! Something went wrong. Please try again later.")
@@ -276,7 +280,6 @@ def GetExhastedUser():
     return read_list_from_file(os.path.curdir + "/files/exhasteduser.txt")
 def GetAdmins():
     return read_list_from_file(ADMINSFILE)
-
 def AddExhastedUser(ID:str):
     """
     Add a user to the list of users who have already used the bot.
@@ -288,6 +291,8 @@ def AddExhastedUser(ID:str):
     users.append(ID)
     write_list_to_file(os.path.curdir + "/files/exhasteduser.txt", users)
 def main():
+    delay = 5
+    max_delay = 300
     # Create the application with your bot's token
     app = Application.builder().token(BOT_TOKEN).build()
     # Add a CommandHandler for the /start command
@@ -305,9 +310,15 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     
-    # Run the bot
-    print("Bot is running...")
-    app.run_polling()
+    while True:
+        try:
+            print("Bot is running...")
+            app.run_polling()
+            delay = 5  # reset on clean exit
+        except httpx.ConnectError as e:
+            log_event(f"Network error, retrying in {delay}s: {e}", level="WARNING")
+            time.sleep(delay)
+            delay = min(delay * 2, max_delay)
 
 if __name__ == "__main__":
     main()
